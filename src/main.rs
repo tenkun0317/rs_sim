@@ -12,7 +12,6 @@ use crate::world::{Chunk, CHUNK_SIZE_I32};
 use macroquad::prelude::*;
 use render::{Camera, SelectBlock, CELL_SIZE};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Clone)]
 struct ClipboardData {
@@ -23,7 +22,7 @@ struct ClipboardData {
 
 #[derive(Serialize, Deserialize)]
 struct ProjectFile {
-    chunks: HashMap<(i32, i32), Chunk>,
+    chunks: Vec<((i32, i32), Chunk)>,
     undo_stack: Vec<EditAction>,
     redo_stack: Vec<EditAction>,
     #[serde(default)]
@@ -40,7 +39,7 @@ fn load_project_file(path: &str) -> Option<(world::World, History, Camera)> {
     let mut history = History::new();
     history.undo_stack = data.undo_stack;
     history.redo_stack = data.redo_stack;
-    let world = world::World { chunks: data.chunks };
+    let world = world::World { chunks: data.chunks.into_iter().collect() };
     let camera = Camera {
         offset_x: data.camera_offset_x,
         offset_y: data.camera_offset_y,
@@ -56,7 +55,7 @@ fn save_project_file(
     camera: &Camera,
 ) -> Result<(), String> {
     let data = ProjectFile {
-        chunks: world.chunks.clone(),
+        chunks: world.chunks.iter().map(|(k, v)| (*k, v.clone())).collect(),
         undo_stack: history.undo_stack.clone(),
         redo_stack: history.redo_stack.clone(),
         camera_offset_x: camera.offset_x,
