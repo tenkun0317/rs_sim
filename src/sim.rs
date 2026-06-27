@@ -225,7 +225,7 @@ pub fn block_is_strongly_powered(world: &World, x: i32, y: i32) -> u8 {
                     return 15;
                 }
             }
-            BlockId::RedstoneBlock => {}
+            BlockId::RedstoneBlock => { return 15; }
             BlockId::Repeater => {
                 let rd = decode_repeater_dir(neighbor.data);
                 if decode_repeater_powered(neighbor.data) && rd == dir_from_neighbor {
@@ -760,8 +760,8 @@ fn is_block_powered(world: &World, x: i32, y: i32) -> bool {
                     return true;
                 }
             }
-            BlockId::SolidBlock | BlockId::Target | BlockId::Barrel => {
-                if block_is_strongly_powered(world, nx, ny) > 0 {
+            BlockId::SolidBlock | BlockId::Target | BlockId::Barrel | BlockId::RedstoneLamp => {
+                if block_is_strongly_powered(world, nx, ny) > 0 || block_get_power(world, nx, ny) > 0 {
                     return true;
                 }
             }

@@ -110,8 +110,10 @@ const MAX_TICKS_PER_FRAME: u32 = 60;
 
 impl AppState {
     fn new() -> Self {
-        let (world, loaded_history, loaded_camera) = if std::path::Path::new("temp.json").exists() {
-            load_project_file("temp.json").unwrap_or_else(|| {
+        let _ = std::fs::create_dir_all("saves");
+        let temp_path = "saves/temp.json";
+        let (world, loaded_history, loaded_camera) = if std::path::Path::new(temp_path).exists() {
+            load_project_file(temp_path).unwrap_or_else(|| {
                 let mut w = world::World::new(WORLD_CHUNKS_X, WORLD_CHUNKS_Y);
                 w.place_test_circuit();
                 (w, History::new(), Camera::new())
@@ -495,10 +497,7 @@ impl AppState {
                 }
             }
         }
-        if ctrl && !shift && is_key_pressed(KeyCode::S) {
-            self.do_save();
-        }
-        if ctrl && shift && is_key_pressed(KeyCode::S) {
+        if ctrl && is_key_pressed(KeyCode::S) {
             self.do_save_as();
         }
         if ctrl && is_key_pressed(KeyCode::R) {
@@ -749,9 +748,9 @@ impl AppState {
 
     fn save_world(&mut self, path: &str) -> Result<(), String> {
         save_project_file(path, &self.world, &self.history, &self.camera)?;
-        let _ = save_project_file("temp.json", &self.world, &self.history, &self.camera);
         self.current_save_path = Some(path.to_string());
         self.dirty = false;
+        self.auto_save_needed = false;
         Ok(())
     }
 
@@ -763,7 +762,7 @@ impl AppState {
         self.current_save_path = Some(path.to_string());
         self.simulation_needed = true;
         self.dirty = false;
-        let _ = save_project_file("temp.json", &self.world, &self.history, &self.camera);
+        let _ = save_project_file("saves/temp.json", &self.world, &self.history, &self.camera);
         Ok(())
     }
 
@@ -811,7 +810,7 @@ impl AppState {
     fn do_save_as(&mut self) {
         if let Some(path) = tinyfiledialogs::save_file_dialog_with_filter(
             "Save World As",
-            "",
+            "saves\\",
             &["*.json"],
             "JSON files",
         ) {
@@ -854,7 +853,8 @@ impl AppState {
         }
         if self.auto_save_needed {
             self.auto_save_needed = false;
-            let _ = save_project_file("temp.json", &self.world, &self.history, &self.camera);
+            let path = self.current_save_path.clone().unwrap_or_else(|| "saves/temp.json".to_string());
+            let _ = save_project_file(&path, &self.world, &self.history, &self.camera);
         }
     }
 
@@ -959,7 +959,7 @@ impl AppState {
             SimMode::Timed => format!("TIMED {:.1}t/s", self.ticks_per_sec),
             SimMode::Instant => "INSTANT".to_string(),
         };
-        let text = format!("[Space] {} | [Enter] Step | [+/-] Speed | [R] Clear | [C] Center | [Tab/1-0] Sel | WASD Pan | LClick+Drag: place/interact | RClick+Drag: select | Ctrl+X/C/V: cut/copy/paste | Ctrl+S/Shift+S: save/save-as | Ctrl+R: load | Ctrl+Z: undo | Ctrl+Y: redo | DEL: delete selected | ESC: cancel", mode_display);
+        let text = format!("[Space] {} | [Enter] Step | [+/-] Speed | [R] Clear | [C] Center | [Tab/1-0] Sel | WASD Pan | LClick+Drag: place/interact | RClick+Drag: select | Ctrl+X/C/V: cut/copy/paste | Ctrl+S: save-as | Ctrl+R: load | Ctrl+Z: undo | Ctrl+Y: redo | DEL: delete selected | ESC: cancel", mode_display);
         draw_text(
             &text,
             5.0,
