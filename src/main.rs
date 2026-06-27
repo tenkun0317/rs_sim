@@ -8,9 +8,11 @@ mod world;
 
 use crate::block::*;
 use crate::history::{EditAction, History};
+use crate::world::{Chunk, CHUNK_SIZE_I32};
 use macroquad::prelude::*;
 use render::{Camera, SelectBlock, CELL_SIZE};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 struct ClipboardData {
@@ -21,9 +23,7 @@ struct ClipboardData {
 
 #[derive(Serialize, Deserialize)]
 struct ProjectFile {
-    width: usize,
-    height: usize,
-    blocks: Vec<Block>,
+    chunks: HashMap<(i32, i32), Chunk>,
     undo_stack: Vec<EditAction>,
     redo_stack: Vec<EditAction>,
     #[serde(default)]
@@ -32,10 +32,6 @@ struct ProjectFile {
     camera_offset_y: f32,
     #[serde(default)]
     camera_zoom: f32,
-    #[serde(default)]
-    world_offset_x: i32,
-    #[serde(default)]
-    world_offset_y: i32,
 }
 
 fn load_project_file(path: &str) -> Option<(world::World, History, Camera)> {
@@ -44,13 +40,7 @@ fn load_project_file(path: &str) -> Option<(world::World, History, Camera)> {
     let mut history = History::new();
     history.undo_stack = data.undo_stack;
     history.redo_stack = data.redo_stack;
-    let world = world::World {
-        width: data.width,
-        height: data.height,
-        blocks: data.blocks,
-        offset_x: data.world_offset_x,
-        offset_y: data.world_offset_y,
-    };
+    let world = world::World { chunks: data.chunks };
     let camera = Camera {
         offset_x: data.camera_offset_x,
         offset_y: data.camera_offset_y,
@@ -66,24 +56,20 @@ fn save_project_file(
     camera: &Camera,
 ) -> Result<(), String> {
     let data = ProjectFile {
-        width: world.width,
-        height: world.height,
-        blocks: world.blocks.clone(),
+        chunks: world.chunks.clone(),
         undo_stack: history.undo_stack.clone(),
         redo_stack: history.redo_stack.clone(),
         camera_offset_x: camera.offset_x,
         camera_offset_y: camera.offset_y,
         camera_zoom: camera.zoom,
-        world_offset_x: world.offset_x,
-        world_offset_y: world.offset_y,
     };
     let json = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
     std::fs::write(path, json.as_bytes()).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-const WORLD_WIDTH: usize = 64;
-const WORLD_HEIGHT: usize = 64;
+const WORLD_CHUNKS_X: usize = 4;
+const WORLD_CHUNKS_Y: usize = 4;
 const UI_BAR_HEIGHT: f32 = 60.0;
 
 struct AppState {
@@ -126,12 +112,12 @@ impl AppState {
     fn new() -> Self {
         let (world, loaded_history, loaded_camera) = if std::path::Path::new("temp.json").exists() {
             load_project_file("temp.json").unwrap_or_else(|| {
-                let mut w = world::World::new(WORLD_WIDTH, WORLD_HEIGHT);
+                let mut w = world::World::new(WORLD_CHUNKS_X, WORLD_CHUNKS_Y);
                 w.place_test_circuit();
                 (w, History::new(), Camera::new())
             })
         } else {
-            let mut w = world::World::new(WORLD_WIDTH, WORLD_HEIGHT);
+            let mut w = world::World::new(WORLD_CHUNKS_X, WORLD_CHUNKS_Y);
             w.place_test_circuit();
             (w, History::new(), Camera::new())
         };
@@ -167,8 +153,16 @@ impl AppState {
         let screen_w = screen_width();
         let screen_h = screen_height() - UI_BAR_HEIGHT;
         let cs = CELL_SIZE * self.camera.zoom;
-        let cx = self.world.offset_x as f32 + self.world.width as f32 / 2.0;
-        let cy = self.world.offset_y as f32 + self.world.height as f32 / 2.0;
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
+        for (&(cx, cy), _) in &self.world.chunks {
+            min_x = min_x.min(cx * CHUNK_SIZE_I32);
+            min_y = min_y.min(cy * CHUNK_SIZE_I32);
+            max_x = max_x.max((cx + 1) * CHUNK_SIZE_I32);
+            max_y = max_y.max((cy + 1) * CHUNK_SIZE_I32);
+        }
+        if min_x == i32::MAX { return; }
+        let cx = (min_x as f32 + max_x as f32) / 2.0;
+        let cy = (min_y as f32 + max_y as f32) / 2.0;
         self.camera.offset_x = screen_w / 2.0 - cx * cs;
         self.camera.offset_y = screen_h / 2.0 - cy * cs;
     }
@@ -524,16 +518,29 @@ impl AppState {
             self.ticks_per_sec = (self.ticks_per_sec * 2.0).min(MAX_TPS);
         }
         if is_key_pressed(KeyCode::R) && !ctrl {
-            self.edit_begin();
-            for ly in 0..self.world.height as i32 {
-                for lx in 0..self.world.width as i32 {
-                    let b = self.world.get_local(lx, ly).copied().unwrap_or(Block::air());
-                    if b.id != BlockId::Air {
-                        let wx = lx + self.world.offset_x;
-                        let wy = ly + self.world.offset_y;
-                        self.set_block(wx, wy, Block::air());
+            let positions: Vec<(i32, i32)> = {
+                let w = &self.world;
+                let mut pos = Vec::new();
+                for (&(cx, cy), _) in &w.chunks {
+                    let base_x = cx * CHUNK_SIZE_I32;
+                    let base_y = cy * CHUNK_SIZE_I32;
+                    for ly in 0..16 {
+                        for lx in 0..16 {
+                            let wx = base_x + lx;
+                            let wy = base_y + ly;
+                            if let Some(b) = w.get(wx, wy) {
+                                if b.id != BlockId::Air {
+                                    pos.push((wx, wy));
+                                }
+                            }
+                        }
                     }
                 }
+                pos
+            };
+            self.edit_begin();
+            for (wx, wy) in positions {
+                self.set_block(wx, wy, Block::air());
             }
             self.edit_end();
         }
@@ -779,7 +786,7 @@ impl AppState {
             }
         }
 
-        self.world = world::World::new(WORLD_WIDTH, WORLD_HEIGHT);
+        self.world = world::World::new(WORLD_CHUNKS_X, WORLD_CHUNKS_Y);
         self.history = History::new();
         self.camera = Camera::new();
         self.current_save_path = None;

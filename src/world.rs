@@ -1,151 +1,128 @@
 use crate::block::*;
+use std::collections::HashMap;
+
+pub const CHUNK_SIZE: usize = 16;
+pub const CHUNK_SIZE_I32: i32 = 16;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Chunk {
+    pub blocks: [[Block; CHUNK_SIZE]; CHUNK_SIZE],
+}
+
+impl Chunk {
+    pub fn new() -> Self {
+        Chunk {
+            blocks: [[Block::air(); CHUNK_SIZE]; CHUNK_SIZE],
+        }
+    }
+}
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct World {
-    pub width: usize,
-    pub height: usize,
-    pub blocks: Vec<Block>,
-    #[serde(default)]
-    pub offset_x: i32,
-    #[serde(default)]
-    pub offset_y: i32,
+    pub chunks: HashMap<(i32, i32), Chunk>,
 }
 
 impl World {
-    pub fn new(width: usize, height: usize) -> Self {
-        World {
-            width,
-            height,
-            blocks: vec![Block::air(); width * height],
-            offset_x: 0,
-            offset_y: 0,
+    pub fn new(chunks_x: usize, chunks_y: usize) -> Self {
+        let mut chunks = HashMap::new();
+        for cy in 0..chunks_y as i32 {
+            for cx in 0..chunks_x as i32 {
+                chunks.insert((cx, cy), Chunk::new());
+            }
         }
+        World { chunks }
     }
 
-    pub fn idx(&self, x: i32, y: i32) -> Option<usize> {
-        let lx = x.checked_sub(self.offset_x)?;
-        let ly = y.checked_sub(self.offset_y)?;
-        if lx >= 0 && ly >= 0 && (lx as usize) < self.width && (ly as usize) < self.height {
-            Some(ly as usize * self.width + lx as usize)
-        } else {
-            None
-        }
+    pub fn chunk_at(&self, x: i32, y: i32) -> (i32, i32) {
+        (x.div_euclid(CHUNK_SIZE_I32), y.div_euclid(CHUNK_SIZE_I32))
     }
 
     pub fn get(&self, x: i32, y: i32) -> Option<&Block> {
-        self.idx(x, y).map(|i| &self.blocks[i])
+        let (cx, cy) = self.chunk_at(x, y);
+        let chunk = self.chunks.get(&(cx, cy))?;
+        let lx = x.wrapping_sub(cx * CHUNK_SIZE_I32) as usize;
+        let ly = y.wrapping_sub(cy * CHUNK_SIZE_I32) as usize;
+        debug_assert!(lx < CHUNK_SIZE && ly < CHUNK_SIZE);
+        Some(&chunk.blocks[ly][lx])
     }
 
     pub fn get_mut(&mut self, x: i32, y: i32) -> Option<&mut Block> {
-        self.idx(x, y).map(move |i| &mut self.blocks[i])
-    }
-
-    pub fn get_local(&self, lx: i32, ly: i32) -> Option<&Block> {
-        if lx >= 0 && (lx as usize) < self.width && ly >= 0 && (ly as usize) < self.height {
-            Some(&self.blocks[ly as usize * self.width + lx as usize])
-        } else {
-            None
-        }
-    }
-
-    pub fn get_mut_local(&mut self, lx: i32, ly: i32) -> Option<&mut Block> {
-        if lx >= 0 && (lx as usize) < self.width && ly >= 0 && (ly as usize) < self.height {
-            Some(&mut self.blocks[ly as usize * self.width + lx as usize])
-        } else {
-            None
-        }
-    }
-
-    pub fn in_bounds_local(&self, lx: i32, ly: i32) -> bool {
-        lx >= 0 && (lx as usize) < self.width && ly >= 0 && (ly as usize) < self.height
-    }
-
-    pub const CHUNK_SIZE: usize = 16;
-
-    pub fn chunk_at(&self, x: i32, y: i32) -> (i32, i32) {
-        (x.div_euclid(Self::CHUNK_SIZE as i32), y.div_euclid(Self::CHUNK_SIZE as i32))
-    }
-
-    pub fn expand_to_chunk(&mut self, cx: i32, cy: i32) {
-        let cs = Self::CHUNK_SIZE as i32;
-        let target_min_x = cx * cs;
-        let target_min_y = cy * cs;
-        let target_max_x = (cx + 1) * cs;
-        let target_max_y = (cy + 1) * cs;
-
-        let cur_min_x = self.offset_x;
-        let cur_min_y = self.offset_y;
-        let cur_max_x = self.offset_x + self.width as i32;
-        let cur_max_y = self.offset_y + self.height as i32;
-
-        if target_min_x >= cur_min_x && target_max_x <= cur_max_x
-            && target_min_y >= cur_min_y && target_max_y <= cur_max_y
-        { return; }
-
-        let need_left = if target_min_x < cur_min_x { (cur_min_x - target_min_x) as usize } else { 0 };
-        let need_top = if target_min_y < cur_min_y { (cur_min_y - target_min_y) as usize } else { 0 };
-        let need_right = if target_max_x > cur_max_x { (target_max_x - cur_max_x) as usize } else { 0 };
-        let need_bot = if target_max_y > cur_max_y { (target_max_y - cur_max_y) as usize } else { 0 };
-
-        let new_w = self.width + need_left + need_right;
-        let new_h = self.height + need_top + need_bot;
-        self.offset_x -= need_left as i32;
-        self.offset_y -= need_top as i32;
-
-        let mut new_blocks = vec![Block::air(); new_w * new_h];
-        for row in 0..self.height {
-            let src = row * self.width;
-            let dst = (row + need_top) * new_w + need_left;
-            new_blocks[dst..dst + self.width].copy_from_slice(&self.blocks[src..src + self.width]);
-        }
-        self.width = new_w;
-        self.height = new_h;
-        self.blocks = new_blocks;
+        let (cx, cy) = self.chunk_at(x, y);
+        let chunk = self.chunks.get_mut(&(cx, cy))?;
+        let lx = x.wrapping_sub(cx * CHUNK_SIZE_I32) as usize;
+        let ly = y.wrapping_sub(cy * CHUNK_SIZE_I32) as usize;
+        debug_assert!(lx < CHUNK_SIZE && ly < CHUNK_SIZE);
+        Some(&mut chunk.blocks[ly][lx])
     }
 
     pub fn set(&mut self, x: i32, y: i32, block: Block) {
-        if let Some(idx) = self.idx(x, y) {
-            self.blocks[idx] = block;
-        }
+        let (cx, cy) = self.chunk_at(x, y);
+        let chunk = self.chunks.entry((cx, cy)).or_insert_with(Chunk::new);
+        let lx = x.wrapping_sub(cx * CHUNK_SIZE_I32) as usize;
+        let ly = y.wrapping_sub(cy * CHUNK_SIZE_I32) as usize;
+        debug_assert!(lx < CHUNK_SIZE && ly < CHUNK_SIZE);
+        chunk.blocks[ly][lx] = block;
     }
 
     pub fn in_bounds(&self, x: i32, y: i32) -> bool {
-        let lx = x - self.offset_x;
-        let ly = y - self.offset_y;
-        lx >= 0 && (lx as usize) < self.width && ly >= 0 && (ly as usize) < self.height
+        let (cx, cy) = self.chunk_at(x, y);
+        self.chunks.contains_key(&(cx, cy))
     }
 
     pub fn for_each<F>(&self, mut f: F)
     where
         F: FnMut(i32, i32, &Block),
     {
-        for y in 0..self.height {
-            for x in 0..self.width {
-                f(x as i32, y as i32, &self.blocks[y * self.width + x]);
+        for (&(cx, cy), chunk) in &self.chunks {
+            let base_x = cx * CHUNK_SIZE_I32;
+            let base_y = cy * CHUNK_SIZE_I32;
+            for ly in 0..CHUNK_SIZE {
+                for lx in 0..CHUNK_SIZE {
+                    let wx = base_x + lx as i32;
+                    let wy = base_y + ly as i32;
+                    f(wx, wy, &chunk.blocks[ly][lx]);
+                }
             }
         }
+    }
+
+    pub fn expand_to_chunk(&mut self, cx: i32, cy: i32) {
+        self.chunks.entry((cx, cy)).or_insert_with(Chunk::new);
     }
 
     pub fn for_each_mut<F>(&mut self, mut f: F)
     where
         F: FnMut(i32, i32, &mut Block),
     {
-        for y in 0..self.height {
-            for x in 0..self.width {
-                f(x as i32, y as i32, &mut self.blocks[y * self.width + x]);
+        let keys: Vec<(i32, i32)> = self.chunks.keys().copied().collect();
+        for &(cx, cy) in &keys {
+            let base_x = cx * CHUNK_SIZE_I32;
+            let base_y = cy * CHUNK_SIZE_I32;
+            if let Some(chunk) = self.chunks.get_mut(&(cx, cy)) {
+                for ly in 0..CHUNK_SIZE {
+                    for lx in 0..CHUNK_SIZE {
+                        let wx = base_x + lx as i32;
+                        let wy = base_y + ly as i32;
+                        f(wx, wy, &mut chunk.blocks[ly][lx]);
+                    }
+                }
             }
         }
     }
 
     pub fn clear(&mut self) {
-        for block in self.blocks.iter_mut() {
-            *block = Block::air();
+        for chunk in self.chunks.values_mut() {
+            for row in chunk.blocks.iter_mut() {
+                for block in row.iter_mut() {
+                    *block = Block::air();
+                }
+            }
         }
     }
 
     pub fn place_test_circuit(&mut self) {
-        let cx = self.width as i32 / 2 - 3;
-        let cy = self.height as i32 / 2;
+        let cx = 4 * CHUNK_SIZE_I32 / 2 - 3;
+        let cy = 4 * CHUNK_SIZE_I32 / 2;
 
         self.set(cx, cy, Block::torch(true, false, Direction::North));
         self.set(cx + 1, cy, Block::wire());
@@ -161,8 +138,8 @@ impl World {
         self.set(cx + 3, cy + 2, Block::wire());
         self.set(cx + 4, cy + 2, Block::lamp());
 
-        let cx = self.width as i32 - 11;
-        let cy = self.height as i32 / 2;
+        let cx = 4 * CHUNK_SIZE_I32 - 11;
+        let cy = 4 * CHUNK_SIZE_I32 / 2;
         self.set(cx, cy, Block::wire());
         self.set(cx + 1, cy, Block::solid());
         self.set(cx, cy + 1, Block::comparator(Direction::South, ComparatorMode::Compare, false));

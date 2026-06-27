@@ -1,6 +1,6 @@
 use macroquad::prelude::*;
 use crate::block::*;
-use crate::world::World;
+use crate::world::{World, CHUNK_SIZE};
 use crate::sim;
 
 pub const CELL_SIZE: f32 = 40.0;
@@ -148,8 +148,7 @@ fn draw_block(world: &World, wx: i32, wy: i32, block: &Block, sx: f32, sy: f32, 
             let b = (10.0 + 30.0 * intensity) as u8;
             let color = Color::from_rgba(r, g, b, 255);
 
-            let (lx, ly) = (wx - world.offset_x, wy - world.offset_y);
-            let conn = |d| sim::wire_connects_in_dir(world, lx, ly, d);
+            let conn = |d| sim::wire_connects_in_dir(world, wx, wy, d);
             let (cn, cs_dir, ce, cw) = (conn(Direction::North), conn(Direction::South), conn(Direction::East), conn(Direction::West));
 
             let thin = cs * 0.20;
@@ -353,7 +352,7 @@ fn draw_block(world: &World, wx: i32, wy: i32, block: &Block, sx: f32, sy: f32, 
 }
 
 fn draw_chunk_grid(camera: &Camera, min_wx: i32, min_wy: i32, max_wx: i32, max_wy: i32, _world: &World) {
-    let chunk = World::CHUNK_SIZE as i32;
+    let chunk = CHUNK_SIZE as i32;
     let line_color = Color::from_rgba(50, 50, 55, 255);
     let sw = screen_width();
     let sh = screen_height();
