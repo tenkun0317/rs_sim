@@ -104,7 +104,6 @@ pub fn block_is_strongly_powered(world: &World, x: i32, y: i32) -> u8 {
                     return MAX_POWER;
                 }
             }
-            BlockId::RedstoneBlock => { return MAX_POWER; }
             BlockId::Repeater => {
                 let rd = decode_repeater_dir(neighbor.data);
                 if decode_repeater_powered(neighbor.data) && rd == dir_from_neighbor {
@@ -186,9 +185,6 @@ fn block_has_power(world: &World, x: i32, y: i32, exclude: Option<(i32, i32)>) -
                     return true;
                 }
             }
-            BlockId::RedstoneBlock => {
-                return true;
-            }
             BlockId::Lever => {
                 if decode_lever_powered(neighbor.data) {
                     return true;
@@ -246,7 +242,6 @@ fn block_get_power(world: &World, x: i32, y: i32) -> u8 {
                     0
                 }
             }
-            BlockId::RedstoneBlock => MAX_POWER,
             BlockId::Lever => {
                 if decode_lever_powered(neighbor.data) {
                     MAX_POWER
