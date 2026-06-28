@@ -19,7 +19,6 @@ use crate::constants::{
     ZOOM_EPSILON, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, UI_BAR_HEIGHT, WORLD_CHUNKS_X, WORLD_CHUNKS_Y,
 };
 use crate::history::{EditAction, History};
-use crate::world::Chunk;
 use macroquad::prelude::*;
 use render::{Camera, SelectBlock};
 use serde::{Deserialize, Serialize};
@@ -33,7 +32,7 @@ struct ClipboardData {
 
 #[derive(Serialize, Deserialize)]
 struct ProjectFile {
-    chunks: Vec<((i32, i32), Chunk)>,
+    chunks: Vec<((i32, i32), Vec<(u8, u8, Block)>)>,
     undo_stack: Vec<EditAction>,
     redo_stack: Vec<EditAction>,
     #[serde(default)]
@@ -50,7 +49,14 @@ fn load_project_file(path: &str) -> Option<(world::World, History, Camera)> {
     let mut history = History::new();
     history.undo_stack = data.undo_stack;
     history.redo_stack = data.redo_stack;
-    let world = world::World { chunks: data.chunks.into_iter().collect() };
+    let mut world = world::World { chunks: std::collections::HashMap::new() };
+    for ((cx, cy), blocks) in data.chunks {
+        let mut chunk = world::Chunk::new();
+        for (lx, ly, block) in blocks {
+            chunk.blocks[ly as usize][lx as usize] = block;
+        }
+        world.chunks.insert((cx, cy), chunk);
+    }
     let camera = Camera {
         offset_x: data.camera_offset_x,
         offset_y: data.camera_offset_y,
@@ -65,8 +71,29 @@ fn save_project_file(
     history: &History,
     camera: &Camera,
 ) -> Result<(), String> {
+    let chunks: Vec<((i32, i32), Vec<(u8, u8, Block)>)> = world
+        .chunks
+        .iter()
+        .filter_map(|(&key, chunk)| {
+            let blocks: Vec<(u8, u8, Block)> = chunk
+                .blocks
+                .iter()
+                .enumerate()
+                .flat_map(|(ly, row)| {
+                    row.iter().enumerate().filter_map(move |(lx, b)| {
+                        if b.id != BlockId::Air {
+                            Some((lx as u8, ly as u8, *b))
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .collect();
+            if blocks.is_empty() { None } else { Some((key, blocks)) }
+        })
+        .collect();
     let data = ProjectFile {
-        chunks: world.chunks.iter().map(|(k, v)| (*k, v.clone())).collect(),
+        chunks,
         undo_stack: history.undo_stack.clone(),
         redo_stack: history.redo_stack.clone(),
         camera_offset_x: camera.offset_x,
@@ -111,7 +138,7 @@ enum SimMode {
 
 impl AppState {
     fn new() -> Self {
-        let _ = std::fs::create_dir_all("saves");
+        let _ = std::fs::create_dir_all(DEFAULT_SAVE_DIR.trim_end_matches('\\'));
         let (world, loaded_history, loaded_camera) = if std::path::Path::new(TEMP_SAVE_PATH).exists() {
             load_project_file(TEMP_SAVE_PATH).unwrap_or_else(|| {
                 let mut w = world::World::new(WORLD_CHUNKS_X, WORLD_CHUNKS_Y);
