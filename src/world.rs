@@ -1,8 +1,6 @@
 use crate::block::*;
+use crate::constants::{CHUNK_SIZE, CHUNK_SIZE_I32, WORLD_CHUNKS_X};
 use std::collections::HashMap;
-
-pub const CHUNK_SIZE: usize = 16;
-pub const CHUNK_SIZE_I32: i32 = 16;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Chunk {
@@ -121,8 +119,9 @@ impl World {
     }
 
     pub fn place_test_circuit(&mut self) {
-        let cx = 4 * CHUNK_SIZE_I32 / 2 - 3;
-        let cy = 4 * CHUNK_SIZE_I32 / 2;
+        let world_w = WORLD_CHUNKS_X as i32 * CHUNK_SIZE_I32;
+        let cx = world_w / 2 - 3;
+        let cy = world_w / 2;
 
         self.set(cx, cy, Block::torch(true, false, Direction::North));
         self.set(cx + 1, cy, Block::wire());
@@ -138,8 +137,8 @@ impl World {
         self.set(cx + 3, cy + 2, Block::wire());
         self.set(cx + 4, cy + 2, Block::lamp());
 
-        let cx = 4 * CHUNK_SIZE_I32 - 11;
-        let cy = 4 * CHUNK_SIZE_I32 / 2;
+        let cx = world_w - 11;
+        let cy = world_w / 2;
         self.set(cx, cy, Block::wire());
         self.set(cx + 1, cy, Block::solid());
         self.set(cx, cy + 1, Block::comparator(Direction::South, ComparatorMode::Compare, false));

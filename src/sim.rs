@@ -1,8 +1,9 @@
 use crate::block::*;
-use crate::world::{World, CHUNK_SIZE, CHUNK_SIZE_I32};
+use crate::constants::{
+    BUTTON_POWERED_SHIFT, CHUNK_SIZE, CHUNK_SIZE_I32, MAX_ITERATIONS, MAX_POWER, WIRE_POWER_DECAY,
+};
+use crate::world::World;
 use std::collections::VecDeque;
-
-const MAX_ITERATIONS: usize = 20;
 
 pub fn update_simulation(world: &mut World) -> bool {
     let mut any_changed = false;
@@ -90,10 +91,10 @@ fn calculate_wire_power(world: &mut World) {
     }
 
     while let Some((x, y, power)) = queue.pop_front() {
-        if power <= 1 {
+        if power <= WIRE_POWER_DECAY {
             continue;
         }
-        let new_power = power - 1;
+        let new_power = power - WIRE_POWER_DECAY;
 
         for dir in Direction::ALL {
             let (nx, ny) = (x + dir.dx(), y + dir.dy());
@@ -136,29 +137,29 @@ fn get_emitted_power(block: &Block) -> Option<u8> {
     match block.id {
         BlockId::RedstoneTorch => {
             if decode_torch_lit(block.data) {
-                Some(15)
+                Some(MAX_POWER)
             } else {
                 None
             }
         }
-        BlockId::RedstoneBlock => Some(15),
+        BlockId::RedstoneBlock => Some(MAX_POWER),
         BlockId::Lever => {
             if decode_lever_powered(block.data) {
-                Some(15)
+                Some(MAX_POWER)
             } else {
                 None
             }
         }
         BlockId::Button => {
-            if ((block.data >> 2) & 1) != 0 {
-                Some(15)
+            if ((block.data >> BUTTON_POWERED_SHIFT) & 1) != 0 {
+                Some(MAX_POWER)
             } else {
                 None
             }
         }
         BlockId::Repeater => {
             if decode_repeater_powered(block.data) {
-                Some(15)
+                Some(MAX_POWER)
             } else {
                 None
             }
@@ -222,14 +223,14 @@ pub fn block_is_strongly_powered(world: &World, x: i32, y: i32) -> u8 {
                     && (!decode_torch_on_wall(neighbor.data)
                         || decode_torch_dir(neighbor.data) != dir_from_neighbor)
                 {
-                    return 15;
+                    return MAX_POWER;
                 }
             }
-            BlockId::RedstoneBlock => { return 15; }
+            BlockId::RedstoneBlock => { return MAX_POWER; }
             BlockId::Repeater => {
                 let rd = decode_repeater_dir(neighbor.data);
                 if decode_repeater_powered(neighbor.data) && rd == dir_from_neighbor {
-                    return 15;
+                    return MAX_POWER;
                 }
             }
             BlockId::Comparator => {
@@ -316,7 +317,7 @@ fn block_has_power(world: &World, x: i32, y: i32, exclude: Option<(i32, i32)>) -
                 }
             }
             BlockId::Button => {
-                if ((neighbor.data >> 2) & 1) != 0 {
+                if ((neighbor.data >> BUTTON_POWERED_SHIFT) & 1) != 0 {
                     return true;
                 }
             }
@@ -359,7 +360,7 @@ fn block_get_power(world: &World, x: i32, y: i32) -> u8 {
                     if !decode_torch_on_wall(neighbor.data)
                         || decode_torch_dir(neighbor.data) != dir.opposite()
                     {
-                        15
+                        MAX_POWER
                     } else {
                         0
                     }
@@ -367,17 +368,17 @@ fn block_get_power(world: &World, x: i32, y: i32) -> u8 {
                     0
                 }
             }
-            BlockId::RedstoneBlock => 15,
+            BlockId::RedstoneBlock => MAX_POWER,
             BlockId::Lever => {
                 if decode_lever_powered(neighbor.data) {
-                    15
+                    MAX_POWER
                 } else {
                     0
                 }
             }
             BlockId::Button => {
-                if ((neighbor.data >> 2) & 1) != 0 {
-                    15
+                if ((neighbor.data >> BUTTON_POWERED_SHIFT) & 1) != 0 {
+                    MAX_POWER
                 } else {
                     0
                 }
@@ -385,7 +386,7 @@ fn block_get_power(world: &World, x: i32, y: i32) -> u8 {
             BlockId::Repeater => {
                 let rd = decode_repeater_dir(neighbor.data);
                 if decode_repeater_powered(neighbor.data) && rd == dir.opposite() {
-                    15
+                    MAX_POWER
                 } else {
                     0
                 }
@@ -433,29 +434,29 @@ fn get_input_power(world: &World, x: i32, y: i32, read_containers: bool) -> u8 {
         BlockId::RedstoneWire => block.power,
         BlockId::RedstoneTorch => {
             if decode_torch_lit(block.data) {
-                15
+                MAX_POWER
             } else {
                 0
             }
         }
-        BlockId::RedstoneBlock => 15,
+        BlockId::RedstoneBlock => MAX_POWER,
         BlockId::Lever => {
             if decode_lever_powered(block.data) {
-                15
+                MAX_POWER
             } else {
                 0
             }
         }
         BlockId::Button => {
-            if ((block.data >> 2) & 1) != 0 {
-                15
+            if ((block.data >> BUTTON_POWERED_SHIFT) & 1) != 0 {
+                MAX_POWER
             } else {
                 0
             }
         }
         BlockId::Repeater => {
             if decode_repeater_powered(block.data) {
-                15
+                MAX_POWER
             } else {
                 0
             }
@@ -478,7 +479,6 @@ fn get_input_power(world: &World, x: i32, y: i32, read_containers: bool) -> u8 {
                 p
             }
         }
-        _ => 0,
     }
 }
 
@@ -490,22 +490,22 @@ fn get_input_power_from_side(world: &World, x: i32, y: i32, from_caller: Directi
         BlockId::RedstoneWire => block.power,
         BlockId::RedstoneTorch => {
             if decode_torch_lit(block.data) {
-                15
+                MAX_POWER
             } else {
                 0
             }
         }
-        BlockId::RedstoneBlock => 15,
+        BlockId::RedstoneBlock => MAX_POWER,
         BlockId::Lever => {
             if decode_lever_powered(block.data) {
-                15
+                MAX_POWER
             } else {
                 0
             }
         }
         BlockId::Button => {
-            if ((block.data >> 2) & 1) != 0 {
-                15
+            if ((block.data >> BUTTON_POWERED_SHIFT) & 1) != 0 {
+                MAX_POWER
             } else {
                 0
             }
@@ -514,7 +514,7 @@ fn get_input_power_from_side(world: &World, x: i32, y: i32, from_caller: Directi
             if decode_repeater_powered(block.data)
                 && decode_repeater_dir(block.data) == from_caller.opposite()
             {
-                15
+                MAX_POWER
             } else {
                 0
             }
@@ -669,7 +669,7 @@ fn update_components(world: &mut World) -> bool {
 
                     BlockId::Button => {
                         let dir = decode_lever_dir(block.data);
-                        let powered = ((block.data >> 2) & 1) != 0;
+                        let powered = ((block.data >> BUTTON_POWERED_SHIFT) & 1) != 0;
                         let counter = decode_button_counter(block.data);
                         if powered && counter > 0 {
                             let (new_powered, new_counter) = if counter > 1 {
@@ -744,7 +744,7 @@ fn is_block_powered(world: &World, x: i32, y: i32) -> bool {
                 }
             }
             BlockId::Button => {
-                if ((neighbor.data >> 2) & 1) != 0 {
+                if ((neighbor.data >> BUTTON_POWERED_SHIFT) & 1) != 0 {
                     return true;
                 }
             }

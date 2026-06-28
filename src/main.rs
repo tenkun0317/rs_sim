@@ -1,16 +1,27 @@
 #![allow(dead_code)]
 
 mod block;
+mod constants;
 mod history;
 mod render;
 mod sim;
 mod world;
 
 use crate::block::*;
+use crate::constants::{
+    BARREL_STRENGTH_COUNT, CELL_SIZE, CENTER_CLICK_THRESHOLD,
+    CHUNK_SIZE_I32, DEFAULT_SAVE_DIR, DEFAULT_TPS, HOVER_OUTLINE_WIDTH, MAX_TPS,
+    MAX_TICKS_PER_FRAME, MIN_TPS, PAN_SPEED_BASE, REPEATER_DELAY_COUNT, SAVE_EXTENSION,
+    SAVE_EXTENSION_LABEL, SELECTION_LABEL_FONT_SIZE, SELECTION_LABEL_Y_OFFSET, SELECTION_OUTLINE_WIDTH,
+    STATUS_FONT_SIZE, STATUS_TEXT_COLOR, STATUS_TEXT_X, STATUS_TEXT_Y_OFFSET, TEMP_SAVE_PATH,
+    BG_CLEAR_COLOR, HOVER_HIGHLIGHT_COLOR, SELECTION_FILL_COLOR, SELECTION_OUTLINE_COLOR,
+    SELECTION_LABEL_COLOR, PASTE_MODE_TEXT_COLOR, PASTE_TEXT_X, PASTE_TEXT_Y, PASTE_TEXT_FONT_SIZE,
+    ZOOM_EPSILON, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, UI_BAR_HEIGHT, WORLD_CHUNKS_X, WORLD_CHUNKS_Y,
+};
 use crate::history::{EditAction, History};
-use crate::world::{Chunk, CHUNK_SIZE_I32};
+use crate::world::Chunk;
 use macroquad::prelude::*;
-use render::{Camera, SelectBlock, CELL_SIZE};
+use render::{Camera, SelectBlock};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
@@ -67,10 +78,6 @@ fn save_project_file(
     Ok(())
 }
 
-const WORLD_CHUNKS_X: usize = 4;
-const WORLD_CHUNKS_Y: usize = 4;
-const UI_BAR_HEIGHT: f32 = 60.0;
-
 struct AppState {
     world: world::World,
     camera: Camera,
@@ -102,17 +109,11 @@ enum SimMode {
     Instant,
 }
 
-const MIN_TPS: f64 = 0.15625;
-const MAX_TPS: f64 = 81920.0;
-const DEFAULT_TPS: f64 = 10.0;
-const MAX_TICKS_PER_FRAME: u32 = 60;
-
 impl AppState {
     fn new() -> Self {
         let _ = std::fs::create_dir_all("saves");
-        let temp_path = "saves/temp.json";
-        let (world, loaded_history, loaded_camera) = if std::path::Path::new(temp_path).exists() {
-            load_project_file(temp_path).unwrap_or_else(|| {
+        let (world, loaded_history, loaded_camera) = if std::path::Path::new(TEMP_SAVE_PATH).exists() {
+            load_project_file(TEMP_SAVE_PATH).unwrap_or_else(|| {
                 let mut w = world::World::new(WORLD_CHUNKS_X, WORLD_CHUNKS_Y);
                 w.place_test_circuit();
                 (w, History::new(), Camera::new())
@@ -243,7 +244,7 @@ impl AppState {
                                 match block.id {
                                     BlockId::Barrel => {
                                         let strength =
-                                            (decode_barrel_strength(block.data) + 1) % 16;
+                                            (decode_barrel_strength(block.data) + 1) % BARREL_STRENGTH_COUNT;
                                         self.set_block(wx, wy, Block::barrel(strength));
                                         return;
                                     }
@@ -266,7 +267,7 @@ impl AppState {
                                     }
                                     BlockId::Repeater => {
                                         let dir = decode_repeater_dir(block.data);
-                                        let delay = (decode_repeater_delay(block.data) + 1) % 4;
+                                        let delay = (decode_repeater_delay(block.data) + 1) % REPEATER_DELAY_COUNT;
                                         let locked = decode_repeater_locked(block.data);
                                         let powered = decode_repeater_powered(block.data);
                                         self.set_block(
@@ -331,7 +332,7 @@ impl AppState {
                             let cy = wy as f32 * CELL_SIZE * self.camera.zoom
                                 + self.camera.offset_y
                                 + CELL_SIZE * self.camera.zoom / 2.0;
-                            let threshold = CELL_SIZE * self.camera.zoom * 0.25;
+                            let threshold = CELL_SIZE * self.camera.zoom * CENTER_CLICK_THRESHOLD;
                             (mx - cx).abs() < threshold && (my - cy).abs() < threshold
                         };
 
@@ -446,8 +447,8 @@ impl AppState {
                 wheel_delta
             };
             let old_zoom = self.camera.zoom;
-            let new_zoom = (self.camera.zoom * (1.0 + steps * 0.06)).clamp(0.0625, 16.0);
-            if (new_zoom - old_zoom).abs() > 0.001 {
+            let new_zoom = (self.camera.zoom * (1.0 + steps * ZOOM_STEP)).clamp(ZOOM_MIN, ZOOM_MAX);
+            if (new_zoom - old_zoom).abs() > ZOOM_EPSILON {
                 let (mx, my) = mouse_position();
                 let wx_exact = (mx - self.camera.offset_x) / (CELL_SIZE * old_zoom);
                 let wy_exact = (my - self.camera.offset_y) / (CELL_SIZE * old_zoom);
@@ -573,7 +574,7 @@ impl AppState {
             }
         }
 
-        let ps = 10.0 / self.camera.zoom;
+        let ps = PAN_SPEED_BASE / self.camera.zoom;
         for &(key, dx, dy) in &[
             (KeyCode::Left, 1, 0),
             (KeyCode::A, 1, 0),
@@ -761,7 +762,7 @@ impl AppState {
         self.current_save_path = Some(path.to_string());
         self.simulation_needed = true;
         self.dirty = false;
-        let _ = save_project_file("saves/temp.json", &self.world, &self.history, &self.camera);
+        let _ = save_project_file(TEMP_SAVE_PATH, &self.world, &self.history, &self.camera);
         Ok(())
     }
 
@@ -809,9 +810,9 @@ impl AppState {
     fn do_save_as(&mut self) {
         if let Some(path) = tinyfiledialogs::save_file_dialog_with_filter(
             "Save World As",
-            "saves\\",
-            &["*.json"],
-            "JSON files",
+            DEFAULT_SAVE_DIR,
+            &[SAVE_EXTENSION],
+            SAVE_EXTENSION_LABEL,
         ) {
             let _ = self.save_world(&path);
         }
@@ -819,7 +820,7 @@ impl AppState {
 
     fn do_load(&mut self) {
         if let Some(path) =
-            tinyfiledialogs::open_file_dialog("Load World", "", Some((&["*.json"], "JSON files")))
+            tinyfiledialogs::open_file_dialog("Load World", "", Some((&[SAVE_EXTENSION], SAVE_EXTENSION_LABEL)))
         {
             let _ = self.load_world(&path);
         }
@@ -852,13 +853,13 @@ impl AppState {
         }
         if self.auto_save_needed {
             self.auto_save_needed = false;
-            let path = self.current_save_path.clone().unwrap_or_else(|| "saves/temp.json".to_string());
+            let path = self.current_save_path.clone().unwrap_or_else(|| TEMP_SAVE_PATH.to_string());
             let _ = save_project_file(&path, &self.world, &self.history, &self.camera);
         }
     }
 
     fn render(&self) {
-        clear_background(Color::from_rgba(20, 20, 20, 255));
+        clear_background(Color::from_rgba(BG_CLEAR_COLOR.0, BG_CLEAR_COLOR.1, BG_CLEAR_COLOR.2, BG_CLEAR_COLOR.3));
 
         render::draw_world(
             &self.world,
@@ -887,7 +888,7 @@ impl AppState {
             let (wx, wy) = self.last_mouse_world;
             let (sx, sy) = self.camera.world_to_screen(wx, wy);
             let cs = self.camera.cell_size();
-            draw_rectangle_lines(sx, sy, cs, cs, 2.0, Color::from_rgba(255, 255, 255, 100));
+            draw_rectangle_lines(sx, sy, cs, cs, HOVER_OUTLINE_WIDTH, Color::from_rgba(HOVER_HIGHLIGHT_COLOR.0, HOVER_HIGHLIGHT_COLOR.1, HOVER_HIGHLIGHT_COLOR.2, HOVER_HIGHLIGHT_COLOR.3));
         }
 
         if let (Some(s), Some(e)) = (self.select_start, self.select_end) {
@@ -902,15 +903,15 @@ impl AppState {
             let ry = sy;
             let rw = ex - sx + cs;
             let rh = ey - sy + cs;
-            draw_rectangle(rx, ry, rw, rh, Color::from_rgba(255, 255, 255, 20));
-            draw_rectangle_lines(rx, ry, rw, rh, 2.0, Color::from_rgba(255, 255, 255, 160));
+            draw_rectangle(rx, ry, rw, rh, Color::from_rgba(SELECTION_FILL_COLOR.0, SELECTION_FILL_COLOR.1, SELECTION_FILL_COLOR.2, SELECTION_FILL_COLOR.3));
+            draw_rectangle_lines(rx, ry, rw, rh, SELECTION_OUTLINE_WIDTH, Color::from_rgba(SELECTION_OUTLINE_COLOR.0, SELECTION_OUTLINE_COLOR.1, SELECTION_OUTLINE_COLOR.2, SELECTION_OUTLINE_COLOR.3));
             let label = format!("{}x{} area | DEL to clear", x1 - x0 + 1, y1 - y0 + 1);
             draw_text(
                 &label,
                 rx,
-                ry - 6.0,
-                14.0,
-                Color::from_rgba(255, 255, 255, 200),
+                ry - SELECTION_LABEL_Y_OFFSET,
+                SELECTION_LABEL_FONT_SIZE,
+                Color::from_rgba(SELECTION_LABEL_COLOR.0, SELECTION_LABEL_COLOR.1, SELECTION_LABEL_COLOR.2, SELECTION_LABEL_COLOR.3),
             );
         }
 
@@ -944,10 +945,10 @@ impl AppState {
         if self.paste_mode {
             draw_text(
                 "PASTE MODE (click to paste, ESC to cancel)",
-                10.0,
-                20.0,
-                18.0,
-                Color::from_rgba(255, 255, 100, 255),
+                PASTE_TEXT_X,
+                PASTE_TEXT_Y,
+                PASTE_TEXT_FONT_SIZE,
+                Color::from_rgba(PASTE_MODE_TEXT_COLOR.0, PASTE_MODE_TEXT_COLOR.1, PASTE_MODE_TEXT_COLOR.2, PASTE_MODE_TEXT_COLOR.3),
             );
         }
 
@@ -961,10 +962,10 @@ impl AppState {
         let text = format!("[Space] {} | [Enter] Step | [+/-] Speed | [R] Clear | [C] Center | [Tab/1-0] Sel | WASD Pan | LClick+Drag: place/interact | RClick+Drag: select | Ctrl+X/C/V: cut/copy/paste | Ctrl+S: save-as | Ctrl+R: load | Ctrl+Z: undo | Ctrl+Y: redo | DEL: delete selected | ESC: cancel", mode_display);
         draw_text(
             &text,
-            5.0,
-            screen_height() - UI_BAR_HEIGHT - 5.0,
-            12.0,
-            Color::from_rgba(150, 150, 150, 255),
+            STATUS_TEXT_X,
+            screen_height() - UI_BAR_HEIGHT - STATUS_TEXT_Y_OFFSET,
+            STATUS_FONT_SIZE,
+            Color::from_rgba(STATUS_TEXT_COLOR.0, STATUS_TEXT_COLOR.1, STATUS_TEXT_COLOR.2, STATUS_TEXT_COLOR.3),
         );
     }
 }

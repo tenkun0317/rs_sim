@@ -1,3 +1,10 @@
+use crate::constants::{
+    BARREL_MAX_STRENGTH, BARREL_STRENGTH_MASK, BUTTON_COUNTER_MASK, BUTTON_COUNTER_SHIFT,
+    BUTTON_DEFAULT_TICKS, BUTTON_MAX_COUNTER, BUTTON_POWERED_SHIFT, COMPARATOR_MODE_SHIFT,
+    COMPARATOR_POWERED_SHIFT, DIR_MASK, LEVER_POWERED_SHIFT, REPEATER_COUNTER_MASK,
+    REPEATER_COUNTER_SHIFT, REPEATER_DELAY_MASK, REPEATER_DELAY_SHIFT, REPEATER_LOCKED_SHIFT,
+    REPEATER_MAX_COUNTER, REPEATER_MAX_DELAY, REPEATER_POWERED_SHIFT, TORCH_DIR_SHIFT,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,7 +97,7 @@ pub enum ComparatorMode {
 pub fn encode_dir(d: Direction) -> u16 { d as u16 }
 
 pub fn decode_dir(data: u16) -> Direction {
-    match data & 3 {
+    match data & DIR_MASK {
         0 => Direction::North,
         1 => Direction::South,
         2 => Direction::East,
@@ -100,48 +107,54 @@ pub fn decode_dir(data: u16) -> Direction {
 }
 
 pub fn encode_repeater(dir: Direction, delay: u8, locked: bool, powered: bool, counter: u8) -> u16 {
-    encode_dir(dir) | ((delay as u16).min(3) << 2) | ((locked as u16) << 4) | ((powered as u16) << 5) | ((counter as u16).min(7) << 6)
+    encode_dir(dir)
+        | ((delay as u16).min(REPEATER_MAX_DELAY as u16) << REPEATER_DELAY_SHIFT)
+        | ((locked as u16) << REPEATER_LOCKED_SHIFT)
+        | ((powered as u16) << REPEATER_POWERED_SHIFT)
+        | ((counter as u16).min(REPEATER_MAX_COUNTER as u16) << REPEATER_COUNTER_SHIFT)
 }
 
 pub fn decode_repeater_dir(data: u16) -> Direction { decode_dir(data) }
-pub fn decode_repeater_delay(data: u16) -> u8 { ((data >> 2) & 3) as u8 }
-pub fn decode_repeater_locked(data: u16) -> bool { ((data >> 4) & 1) != 0 }
-pub fn decode_repeater_powered(data: u16) -> bool { ((data >> 5) & 1) != 0 }
-pub fn decode_repeater_counter(data: u16) -> u8 { ((data >> 6) & 7) as u8 }
+pub fn decode_repeater_delay(data: u16) -> u8 { ((data >> REPEATER_DELAY_SHIFT) & REPEATER_DELAY_MASK as u16) as u8 }
+pub fn decode_repeater_locked(data: u16) -> bool { ((data >> REPEATER_LOCKED_SHIFT) & 1) != 0 }
+pub fn decode_repeater_powered(data: u16) -> bool { ((data >> REPEATER_POWERED_SHIFT) & 1) != 0 }
+pub fn decode_repeater_counter(data: u16) -> u8 { ((data >> REPEATER_COUNTER_SHIFT) & REPEATER_COUNTER_MASK as u16) as u8 }
 
 pub fn encode_comparator(dir: Direction, mode: ComparatorMode, powered: bool) -> u16 {
-    encode_dir(dir) | ((mode as u16) << 2) | ((powered as u16) << 3)
+    encode_dir(dir) | ((mode as u16) << COMPARATOR_MODE_SHIFT) | ((powered as u16) << COMPARATOR_POWERED_SHIFT)
 }
 
 pub fn decode_comparator_dir(data: u16) -> Direction { decode_dir(data) }
 pub fn decode_comparator_mode(data: u16) -> ComparatorMode {
-    if ((data >> 2) & 1) != 0 { ComparatorMode::Subtract } else { ComparatorMode::Compare }
+    if ((data >> COMPARATOR_MODE_SHIFT) & 1) != 0 { ComparatorMode::Subtract } else { ComparatorMode::Compare }
 }
-pub fn decode_comparator_powered(data: u16) -> bool { ((data >> 3) & 1) != 0 }
+pub fn decode_comparator_powered(data: u16) -> bool { ((data >> COMPARATOR_POWERED_SHIFT) & 1) != 0 }
 
 pub fn encode_lever(dir: Direction, powered: bool) -> u16 {
-    encode_dir(dir) | ((powered as u16) << 2)
+    encode_dir(dir) | ((powered as u16) << LEVER_POWERED_SHIFT)
 }
 pub fn decode_lever_dir(data: u16) -> Direction { decode_dir(data) }
-pub fn decode_lever_powered(data: u16) -> bool { ((data >> 2) & 1) != 0 }
+pub fn decode_lever_powered(data: u16) -> bool { ((data >> LEVER_POWERED_SHIFT) & 1) != 0 }
 
 pub fn encode_torch(lit: bool, on_wall: bool, dir: Direction) -> u16 {
-    (lit as u16) | ((on_wall as u16) << 1) | ((dir as u16) << 2)
+    (lit as u16) | ((on_wall as u16) << 1) | ((dir as u16) << TORCH_DIR_SHIFT)
 }
 pub fn decode_torch_lit(data: u16) -> bool { (data & 1) != 0 }
 pub fn decode_torch_on_wall(data: u16) -> bool { ((data >> 1) & 1) != 0 }
-pub fn decode_torch_dir(data: u16) -> Direction { decode_dir(data >> 2) }
+pub fn decode_torch_dir(data: u16) -> Direction { decode_dir(data >> TORCH_DIR_SHIFT) }
 
 pub fn encode_lamp(lit: bool) -> u16 { lit as u16 }
 pub fn decode_lamp_lit(data: u16) -> bool { (data & 1) != 0 }
 
 pub fn encode_button(dir: Direction, powered: bool, counter: u8) -> u16 {
-    encode_dir(dir) | ((powered as u16) << 2) | ((counter as u16).min(31) << 3)
+    encode_dir(dir)
+        | ((powered as u16) << BUTTON_POWERED_SHIFT)
+        | ((counter as u16).min(BUTTON_MAX_COUNTER as u16) << BUTTON_COUNTER_SHIFT)
 }
-pub fn decode_button_counter(data: u16) -> u8 { ((data >> 3) & 0x1F) as u8 }
+pub fn decode_button_counter(data: u16) -> u8 { ((data >> BUTTON_COUNTER_SHIFT) & BUTTON_COUNTER_MASK as u16) as u8 }
 
-pub fn encode_barrel(strength: u8) -> u16 { (strength as u16).min(15) }
-pub fn decode_barrel_strength(data: u16) -> u8 { (data & 0xF) as u8 }
+pub fn encode_barrel(strength: u8) -> u16 { (strength as u16).min(BARREL_MAX_STRENGTH as u16) }
+pub fn decode_barrel_strength(data: u16) -> u8 { (data & BARREL_STRENGTH_MASK) as u8 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Block {
@@ -178,7 +191,7 @@ impl Block {
     }
 
     pub fn button(dir: Direction, powered: bool) -> Self {
-        let counter = if powered { 20u8 } else { 0u8 };
+        let counter = if powered { BUTTON_DEFAULT_TICKS } else { 0u8 };
         Block { id: BlockId::Button, power: 0, data: encode_button(dir, powered, counter) }
     }
 
