@@ -3,6 +3,7 @@
 mod app;
 mod block;
 mod constants;
+mod export;
 mod history;
 mod project;
 mod render;

@@ -219,6 +219,26 @@ impl AppState {
         }
     }
 
+    fn do_export_nbt(&mut self) {
+        if let Some(path) = tinyfiledialogs::save_file_dialog_with_filter(
+            "Export NBT",
+            DEFAULT_SAVE_DIR,
+            &[NBT_EXTENSION],
+            NBT_EXTENSION_LABEL,
+        ) {
+            let mut file = match std::fs::File::create(&path) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("Failed to create NBT file: {}", e);
+                    return;
+                }
+            };
+            if let Err(e) = crate::export::export_nbt(&mut file, &self.world) {
+                eprintln!("Failed to export NBT: {}", e);
+            }
+        }
+    }
+
     fn do_load(&mut self) {
         if let Some(path) =
             tinyfiledialogs::open_file_dialog("Load World", "", Some((&[SAVE_EXTENSION], SAVE_EXTENSION_LABEL)))

@@ -201,6 +201,8 @@ pub const TEMP_SAVE_PATH: &str = "saves/temp.json";
 pub const DEFAULT_SAVE_DIR: &str = "saves\\";
 pub const SAVE_EXTENSION: &str = "*.json";
 pub const SAVE_EXTENSION_LABEL: &str = "JSON files";
+pub const NBT_EXTENSION: &str = "*.nbt";
+pub const NBT_EXTENSION_LABEL: &str = "NBT files";
 
 // ── Block Data Encoding (bit-field layout) ──
 // Direction: bits [1:0]

@@ -61,10 +61,7 @@ impl super::AppState {
                     if self.world.in_bounds(wx, wy) {
                         self.paste_clipboard(wx, wy);
                     }
-                } else if !cleared_selection
-                    && self.select_start.is_none()
-                    && left_down
-                {
+                } else if !cleared_selection && self.select_start.is_none() && left_down {
                     let moved = self.last_placed_pos != Some((wx, wy));
                     let should_place = left_pressed || (self.left_held && moved);
 
@@ -89,8 +86,8 @@ impl super::AppState {
                             if left_pressed {
                                 match block.id {
                                     BlockId::Barrel => {
-                                        let strength =
-                                            (decode_barrel_strength(block.data) + 1) % BARREL_STRENGTH_COUNT;
+                                        let strength = (decode_barrel_strength(block.data) + 1)
+                                            % BARREL_STRENGTH_COUNT;
                                         self.set_block(wx, wy, Block::barrel(strength));
                                         return;
                                     }
@@ -113,7 +110,8 @@ impl super::AppState {
                                     }
                                     BlockId::Repeater => {
                                         let dir = decode_repeater_dir(block.data);
-                                        let delay = (decode_repeater_delay(block.data) + 1) % REPEATER_DELAY_COUNT;
+                                        let delay = (decode_repeater_delay(block.data) + 1)
+                                            % REPEATER_DELAY_COUNT;
                                         let locked = decode_repeater_locked(block.data);
                                         let powered = decode_repeater_powered(block.data);
                                         self.set_block(
@@ -346,7 +344,10 @@ impl super::AppState {
         if ctrl && is_key_pressed(KeyCode::S) {
             self.do_save_as();
         }
-        if ctrl && is_key_pressed(KeyCode::R) {
+        if ctrl && !shift && is_key_pressed(KeyCode::E) {
+            self.do_export_nbt();
+        }
+        if ctrl && is_key_pressed(KeyCode::L) {
             self.do_load();
         }
         if ctrl && is_key_pressed(KeyCode::N) {
