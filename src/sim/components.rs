@@ -131,8 +131,8 @@ pub fn update_components(world: &mut World) -> bool {
                         let side_right_x = wx + side_right_dir.dx();
                         let side_right_y = wy + side_right_dir.dy();
                         let left_power =
-                            power::get_input_power_from_side(world, side_left_x, side_left_y, side_left_dir);
-                        let right_power = power::get_input_power_from_side(
+                            power::comparator_side_power(world, side_left_x, side_left_y, side_left_dir);
+                        let right_power = power::comparator_side_power(
                             world,
                             side_right_x,
                             side_right_y,

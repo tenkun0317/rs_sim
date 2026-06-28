@@ -451,6 +451,33 @@ pub fn get_input_power_from_side(world: &World, x: i32, y: i32, from_caller: Dir
     }
 }
 
+pub fn comparator_side_power(world: &World, x: i32, y: i32, from_side: Direction) -> u8 {
+    let Some(block) = world.get(x, y) else { return 0 };
+    match block.id {
+        BlockId::RedstoneWire => block.power,
+        BlockId::RedstoneBlock => MAX_POWER,
+        BlockId::Repeater => {
+            if decode_repeater_powered(block.data)
+                && decode_repeater_dir(block.data) == from_side.opposite()
+            {
+                MAX_POWER
+            } else {
+                0
+            }
+        }
+        BlockId::Comparator => {
+            if decode_comparator_powered(block.data)
+                && decode_comparator_dir(block.data) == from_side.opposite()
+            {
+                block.power
+            } else {
+                0
+            }
+        }
+        _ => 0,
+    }
+}
+
 pub fn calculate_wire_power(world: &mut World) {
     for chunk in world.chunks.values_mut() {
         for ly in 0..CHUNK_SIZE {
