@@ -26,13 +26,17 @@ impl super::AppState {
             {
                 self.mouse_down_pos = Some((mx, my));
                 self.panning = true;
+                if is_mouse_button_pressed(MouseButton::Middle) {
+                    self.middle_click_origin = Some((mx, my));
+                }
             }
 
             if self.panning {
-                if is_mouse_button_down(MouseButton::Middle)
-                    || (is_mouse_button_down(MouseButton::Right)
-                        && is_key_down(KeyCode::LeftControl))
-                {
+                let middle_down = is_mouse_button_down(MouseButton::Middle);
+                let ctrl_right_down = is_mouse_button_down(MouseButton::Right)
+                    && is_key_down(KeyCode::LeftControl);
+
+                if middle_down || ctrl_right_down {
                     if let Some((last_mx, last_my)) = self.mouse_down_pos {
                         self.camera.offset_x += mx - last_mx;
                         self.camera.offset_y += my - last_my;
@@ -40,6 +44,11 @@ impl super::AppState {
                     }
                 } else {
                     self.panning = false;
+                    if let Some(origin) = self.middle_click_origin.take() {
+                        if (mx - origin.0).abs() < 5.0 && (my - origin.1).abs() < 5.0 {
+                            self.pick_block_at(self.last_mouse_world.0, self.last_mouse_world.1);
+                        }
+                    }
                     self.mouse_down_pos = None;
                 }
             }
@@ -141,8 +150,17 @@ impl super::AppState {
                         }
 
                         if self.selected_block == SelectBlock::Eraser {
+                            if left_pressed {
+                                self.edit_begin();
+                                self.drag_active = true;
+                            }
                             self.set_block(wx, wy, Block::air());
                             return;
+                        }
+
+                        if left_pressed {
+                            self.edit_begin();
+                            self.drag_active = true;
                         }
 
                         let is_drag = !left_pressed;
@@ -224,26 +242,33 @@ impl super::AppState {
                         }
                     }
                 } else {
+                    if self.drag_active {
+                        self.edit_end();
+                        self.drag_active = false;
+                    }
                     self.left_held = false;
                     self.last_placed_pos = None;
                 }
 
                 if is_mouse_button_pressed(MouseButton::Right)
                     && !is_key_down(KeyCode::LeftControl)
-                    && self.world.in_bounds(wx, wy)
                 {
-                    if let (Some(s), Some(e)) = (self.select_start, self.select_end) {
-                        if s == e && s == (wx, wy) {
-                            self.set_block(wx, wy, Block::air());
-                            self.select_start = None;
-                            self.select_end = None;
+                    if self.paste_mode {
+                        self.paste_mode = false;
+                    } else if self.world.in_bounds(wx, wy) {
+                        if let (Some(s), Some(e)) = (self.select_start, self.select_end) {
+                            if s == e && s == (wx, wy) {
+                                self.set_block(wx, wy, Block::air());
+                                self.select_start = None;
+                                self.select_end = None;
+                            } else {
+                                self.select_start = Some((wx, wy));
+                                self.select_end = Some((wx, wy));
+                            }
                         } else {
                             self.select_start = Some((wx, wy));
                             self.select_end = Some((wx, wy));
                         }
-                    } else {
-                        self.select_start = Some((wx, wy));
-                        self.select_end = Some((wx, wy));
                     }
                 }
 
@@ -364,31 +389,15 @@ impl super::AppState {
             self.ticks_per_sec = (self.ticks_per_sec * 2.0).min(MAX_TPS);
         }
         if is_key_pressed(KeyCode::R) && !ctrl {
-            let positions: Vec<(i32, i32)> = {
-                let w = &self.world;
-                let mut pos = Vec::new();
-                for (&(cx, cy), _) in &w.chunks {
-                    let base_x = cx * CHUNK_SIZE_I32;
-                    let base_y = cy * CHUNK_SIZE_I32;
-                    for ly in 0..16 {
-                        for lx in 0..16 {
-                            let wx = base_x + lx;
-                            let wy = base_y + ly;
-                            if let Some(b) = w.get(wx, wy) {
-                                if b.id != BlockId::Air {
-                                    pos.push((wx, wy));
-                                }
-                            }
-                        }
-                    }
+            if self.paste_mode {
+                if let Some(ref mut clip) = self.clipboard {
+                    clip.rotate_cw();
                 }
-                pos
-            };
-            self.edit_begin();
-            for (wx, wy) in positions {
-                self.set_block(wx, wy, Block::air());
+            } else if !shift {
+                self.rotate_selection_blocks();
+            } else {
+                self.rotate_selection_cw();
             }
-            self.edit_end();
         }
         if is_key_pressed(KeyCode::C) {
             self.center_camera();

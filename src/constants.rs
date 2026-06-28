@@ -9,7 +9,7 @@ pub const WORLD_CHUNKS_X: usize = 4;
 pub const WORLD_CHUNKS_Y: usize = 4;
 
 // ── Simulation ──
-pub const MAX_ITERATIONS: usize = 20;
+pub const MAX_ITERATIONS: usize = 255;
 pub const MIN_TPS: f64 = 0.15625;
 pub const MAX_TPS: f64 = 81920.0;
 pub const DEFAULT_TPS: f64 = 10.0;

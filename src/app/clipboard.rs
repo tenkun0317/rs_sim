@@ -7,6 +7,22 @@ pub struct ClipboardData {
     pub height: usize,
 }
 
+impl ClipboardData {
+    pub fn rotate_cw(&mut self) {
+        let mut new_rows = vec![vec![Block::air(); self.height]; self.width];
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let ndx = self.height - 1 - y;
+                let ndy = x;
+                let block = &self.rows[y][x];
+                new_rows[ndy][ndx] = super::rotate_block_cw(block);
+            }
+        }
+        self.rows = new_rows;
+        std::mem::swap(&mut self.width, &mut self.height);
+    }
+}
+
 impl super::AppState {
     pub fn copy_selection(&mut self) {
         if let (Some(s), Some(e)) = (self.select_start, self.select_end) {
