@@ -355,6 +355,49 @@ pub fn get_input_power(world: &World, x: i32, y: i32, read_containers: bool) -> 
     }
 }
 
+pub fn get_input_power_toward(world: &World, x: i32, y: i32, toward: Direction, read_containers: bool) -> u8 {
+    let Some(block) = world.get(x, y) else { return 0 };
+    match block.id {
+        BlockId::Air => 0,
+        BlockId::RedstoneWire => block.power,
+        BlockId::RedstoneTorch => {
+            if decode_torch_lit(block.data) { MAX_POWER } else { 0 }
+        }
+        BlockId::RedstoneBlock => MAX_POWER,
+        BlockId::Lever => {
+            if decode_lever_powered(block.data) { MAX_POWER } else { 0 }
+        }
+        BlockId::Button => {
+            if ((block.data >> BUTTON_POWERED_SHIFT) & 1) != 0 { MAX_POWER } else { 0 }
+        }
+        BlockId::Repeater => {
+            if decode_repeater_powered(block.data) && decode_repeater_dir(block.data) == toward {
+                MAX_POWER
+            } else {
+                0
+            }
+        }
+        BlockId::Comparator => {
+            if decode_comparator_powered(block.data) && decode_comparator_dir(block.data) == toward {
+                block.power
+            } else {
+                0
+            }
+        }
+        BlockId::SolidBlock | BlockId::Target | BlockId::RedstoneLamp => {
+            block_get_power(world, x, y)
+        }
+        BlockId::Barrel => {
+            let p = block_get_power(world, x, y);
+            if read_containers {
+                p.max(decode_barrel_strength(block.data))
+            } else {
+                p
+            }
+        }
+    }
+}
+
 pub fn get_input_power_from_side(world: &World, x: i32, y: i32, from_caller: Direction) -> u8 {
     let Some(block) = world.get(x, y) else {
         return 0;

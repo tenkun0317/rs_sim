@@ -57,7 +57,7 @@ pub fn update_components(world: &mut World) -> bool {
                 } else {
                     let back_x = wx + dir.opposite().dx();
                     let back_y = wy + dir.opposite().dy();
-                    let input_power = power::get_input_power(world, back_x, back_y, false);
+                    let input_power = power::get_input_power_toward(world, back_x, back_y, dir, false);
                     let should_be_powered = input_power > 0;
 
                     if counter > 0 {
@@ -122,7 +122,7 @@ pub fn update_components(world: &mut World) -> bool {
                         let mode = decode_comparator_mode(block.data);
                         let back_x = wx + dir.opposite().dx();
                         let back_y = wy + dir.opposite().dy();
-                        let input_power = power::get_input_power(world, back_x, back_y, true);
+                        let input_power = power::get_input_power_toward(world, back_x, back_y, dir, true);
 
                         let side_left_dir = dir.rotate_ccw();
                         let side_right_dir = dir.rotate_cw();
