@@ -69,6 +69,16 @@ impl super::AppState {
                     let should_place = left_pressed || (self.left_held && moved);
 
                     if should_place {
+                        if !self.world.in_bounds(wx, wy) {
+                            self.world.expand_to_chunk(
+                                self.world.chunk_at(wx, wy).0,
+                                self.world.chunk_at(wx, wy).1,
+                            );
+                            self.last_placed_pos = Some((wx, wy));
+                            self.left_held = true;
+                            return;
+                        }
+
                         let prev_pos = self.last_placed_pos;
                         self.last_placed_pos = Some((wx, wy));
                         self.left_held = true;
